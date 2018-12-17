@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	   xmlns:context="http://www.springframework.org/schema/context"
+	   xmlns:aop="http://www.springframework.org/schema/aop"
+	   xmlns:tx="http://www.springframework.org/schema/tx"
+	   xmlns:jaxws="http://cxf.apache.org/jaxws"
+	   xmlns:soap="http://cxf.apache.org/bindings/soap"
+	   xsi:schemaLocation="http://www.springframework.org/schema/beans
+						http://www.springframework.org/schema/beans/spring-beans.xsd
+						http://www.springframework.org/schema/context
+						http://www.springframework.org/schema/context/spring-context.xsd
+						http://www.springframework.org/schema/aop
+						http://www.springframework.org/schema/aop/spring-aop.xsd
+						http://www.springframework.org/schema/tx
+						http://www.springframework.org/schema/tx/spring-tx.xsd
+						http://cxf.apache.org/bindings/soap
+						http://cxf.apache.org/schemas/configuration/soap.xsd
+						http://cxf.apache.org/jaxws
+						http://cxf.apache.org/schemas/jaxws.xsd
+						">
+	
+	<!-- 加载属性文件 -->
+	<context:property-placeholder location="classpath:db.properties"/>
+				
+	<!-- 配置数据源 -->
+	<bean id="dataSource" class="com.mchange.v2.c3p0.ComboPooledDataSource">
+		<property name="driverClass" value="${jdbc.driverClass}"/>
+		<property name="jdbcUrl" value="${jdbc.jdbcUrl}"/>
+		<property name="user" value="${jdbc.user}"/>
+		<property name="password" value="${jdbc.password}"/>
+	</bean>
+	
+	<!-- 配置LocalSessionFactoryBean，spring提供的用于整合hibernate的工厂bean -->
+	<bean id="sessionFactory" class="org.springframework.orm.hibernate5.LocalSessionFactoryBean">
+		<property name="dataSource" ref="dataSource"/>
+		<!-- 注入hibernate相关的属性配置 -->
+		<property name="hibernateProperties">
+			<props>
+				<prop key="hibernate.dialect">org.hibernate.dialect.MySQL5Dialect</prop>
+				<!--实现hibernate的自动建表-->
+				<!--<prop key="hibernate.hbm2ddl.auto">create</prop>-->
+				<prop key="hibernate.hbm2ddl.auto">update</prop>
+				<prop key="hibernate.show_sql">true</prop>
+				<prop key="hibernate.format_sql">true</prop>
+			</props>
+		</property>
+		<!-- 注入hibernate的映射文件 -->
+		<property name="mappingLocations">
+			<list>
+				<!--配置事务管理器的路径错误-->
+				<!--<value>classpath*:cn/yxd/bean/*.xml</value>-->
+				<value>classpath:cn/yxd/bean/User.hbm.xml</value>
+				<!--扫描定区-->
+				<value>classpath:cn/yxd/bean/Decidedzone.hbm.xml</value>
+				<!--扫描区域-->
+				<value>classpath:cn/yxd/bean/Region.hbm.xml</value>
+				<!--扫描取派员-->
+				<value>classpath:cn/yxd/bean/Staff.hbm.xml</value>
+				<!--扫描分区-->
+				<value>classpath:cn/yxd/bean/Subarea.hbm.xml</value>
+				<value>classpath:cn/yxd/bean/Noticebill.hbm.xml</value>
+				<value>classpath:cn/yxd/bean/Workbill.hbm.xml</value>
+				<value>classpath:cn/yxd/bean/Workordermanage.hbm.xml</value>
+				<value>classpath:cn/yxd/bean/Function.hbm.xml</value>
+				<value>classpath:cn/yxd/bean/Role.hbm.xml</value>
+			</list>
+		</property>
+		<!--<property name="mappingDirectoryLocations" value="classpath:cn/yxd/bean"></property>-->
+	</bean>
+	
+	<!-- 配置事务管理器 -->
+	<bean id="transactionManager" class="org.springframework.orm.hibernate5.HibernateTransactionManager">
+		<property name="sessionFactory" ref="sessionFactory"/>
+	</bean>
+	 <!--组件扫描 -->
+	<context:component-scan base-package="cn.yxd.*"/>
+	<!-- 支持spring注解 -->
+	<context:annotation-config/>
+	
+	<tx:annotation-driven/>	<!--<bean class="cn.yxd.web.action.UserAction" name="userAction">-->
+	<!--注册crm客户端代理对象-->
+	<jaxws:client id="client" serviceClass="cn.yxd.crm.CustomerService" address="http://localhost:8080/cxf/customer">
+	</jaxws:client>
+	<!--配置shiro框架的管理工厂-->
+	<bean id="shiroFilter" class="org.apache.shiro.spring.web.ShiroFilterFactoryBean">
+		<property name="securityManager" ref="securityManager"></property>
+		<property name="loginUrl" value="/login.jsp"></property>
+		<property name="successUrl" value="/index.jsp"></property>
+		<property name="unauthorizedUrl" value="/unauthorized.jsp"></property>
+		<property name="filterChainDefinitions" >
+			<value>
+				<!--对那些东西进行认证-->
+				/css/**=anon
+				/js/**=anon
+				/login.jsp=anon
+				/userAction_login.action=anon
+				/validatecode.jsp*=anon
+				/page_base_staff.action=perms["staff-list"]
+				/*=authc
+			</value>
+		</property>
+
+	</bean>
+	<!--注册安全管理器-->
+	<bean id="securityManager" class="org.apache.shiro.web.mgt.DefaultWebSecurityManager">
+		<property name="realm" ref="bosRealm"></property>
+		<property name="cacheManager" ref="ehcacheMessage"></property>
+	</bean>
+	<!--z注册realm-->
+	<bean id="bosRealm" class="cn.yxd.realm.BosRealm"></bean>
+	<!--配置spring与shiro框架的注解-->
+	<bean id="defaultAdvisorAutoProxyCreator" class="org.springframework.aop.framework.autoproxy.DefaultAdvisorAutoProxyCreator">
+		<!--使用cglib来创建代理对象-->
+		<property name="proxyTargetClass" value="true"></property>
+	</bean>
+	<!--使用shiro框架的切面类为action创建代理类-->
+	<bean class="org.apache.shiro.spring.security.interceptor.AuthorizationAttributeSourceAdvisor"></bean>
+	<!--整合缓存管理器，和安全管理器进行整合-->
+	<!--  private String cacheManagerConfigFile = "classpath:org/apache/shiro/cache/ehcache/ehcache.xml";-->
+	<bean id="ehcacheMessage" class="org.apache.shiro.cache.ehcache.EhCacheManager">
+		<!--注入ehcache.xml-->
+		<property name="cacheManagerConfigFile" value="classpath:ehcache.xml"></property>
+	</bean>
+
+
+
+
+</beans>
